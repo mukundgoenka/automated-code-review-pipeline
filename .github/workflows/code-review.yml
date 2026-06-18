@@ -1,0 +1,66 @@
+name: Automated code review
+
+# Runs the Claude Code review pipeline on every pull request. The job posts
+# structured findings and fails the check if anything high/critical is found.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write   # needed to post the review comment
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history so `main...HEAD` diff works
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run review pipeline (non-interactive)
+        id: review
+        env:
+          # `claude -p` authenticates via this secret; print mode never prompts,
+          # so the job can never hang waiting for input.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE: origin/${{ github.base_ref }}
+          HEAD: HEAD
+          FAIL_ON: high
+        run: |
+          chmod +x pipeline/review-pipeline.sh
+          # `|| true` so we still upload/post the report before the gate decides.
+          ./pipeline/review-pipeline.sh > findings/run.log 2>&1 || echo "blocked=1" >> "$GITHUB_OUTPUT"
+          cat findings/run.log
+
+      - name: Upload findings artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-findings
+          path: findings/
+
+      - name: Post findings as a PR comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          jq -r '
+            "### Automated code review\n\n" +
+            "critical \(.critical) | high \(.high) | medium \(.medium) | low \(.low) | total \(.total)\n\n" +
+            (.findings | map("- **[" + (.severity|ascii_upcase) + "]** `" + .file + ":" + (.line|tostring) + "` (" + .pass + ") — " + .issue + "\n  - _Fix:_ " + .suggested_fix) | join("\n"))
+          ' findings/findings.json > findings/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file findings/comment.md
+
+      - name: Fail the check if blocking findings exist
+        if: steps.review.outputs.blocked == '1'
+        run: |
+          echo "Blocking findings at or above FAIL_ON severity. See the PR comment."
+          exit 1

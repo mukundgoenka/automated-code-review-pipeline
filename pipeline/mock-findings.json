@@ -1,0 +1,53 @@
+{
+  "_comment": "Canned reviewer output used only with -Mock. The pipeline resolves each finding's line number at runtime by locating `match` in the file, so this stays correct even if files are edited. A real run (no -Mock) calls `claude -p` and gets equivalent findings live.",
+  "perFile": {
+    "src/auth.js": [
+      { "match": "if (!token) return true", "severity": "critical", "issue": "verifyToken treats a missing/empty token as authenticated (the check is inverted), so any request with no Authorization header passes requireAuth.", "suggested_fix": "Return false for an empty token: `if (!token) return false;`." },
+      { "match": "Math.random().toString(36)", "severity": "high", "issue": "Session tokens are generated with Math.random(), which is not a CSPRNG, so tokens are predictable and guessable.", "suggested_fix": "Use crypto.randomBytes(32).toString('hex')." },
+      { "match": "activeSessions.set(token", "severity": "medium", "issue": "Expired sessions are never evicted from activeSessions, so the Map grows without bound (memory leak) under sustained logins.", "suggested_fix": "Evict expired entries on lookup or with a periodic sweep." }
+    ],
+    "src/config.js": [
+      { "match": "pmt_live_3f9ahardcodedfallbackdefault", "severity": "medium", "issue": "A live-looking payment API key is hardcoded as the fallback default, so a real secret ships in source control when the env var is unset.", "suggested_fix": "Remove the default and fail fast if PAYMENT_API_KEY is missing." }
+    ],
+    "src/db.js": [
+      { "match": "\"SELECT * FROM orders WHERE user_id = '\" + userId", "severity": "critical", "issue": "userId is concatenated directly into the SQL string, allowing SQL injection.", "suggested_fix": "Use a parameterized query: driver.query('SELECT * FROM orders WHERE user_id = ?', [userId])." }
+    ],
+    "src/utils.js": [],
+    "src/orders.js": [
+      { "match": "let total;", "severity": "high", "issue": "`total` is declared without an initial value, so the first `total += ...` evaluates `undefined + n` and every order total becomes NaN.", "suggested_fix": "Initialize the accumulator: `let total = 0;`." }
+    ],
+    "src/inventory.js": [
+      { "match": "if (available > 0)", "severity": "high", "issue": "reserve() checks `available > 0` instead of `available >= qty` and mutates without any locking, so stock can be oversold and driven negative.", "suggested_fix": "Check `available >= qty` and decrement atomically (or guard with a lock)." }
+    ],
+    "src/discount.js": [
+      { "match": "return price * percent / 100;", "severity": "high", "issue": "applyDiscount returns the discount amount, not the discounted price (20% off $50 returns $10 instead of $40).", "suggested_fix": "Return the remaining price: `return price - price * percent / 100;`." }
+    ],
+    "src/payment.js": [
+      { "match": "catch (e) {", "severity": "high", "issue": "The catch block returns { ok: true } on failure, so a declined or errored charge is reported to callers as a successful payment.", "suggested_fix": "Return { ok: false, error: e.message } and log the error." },
+      { "match": "const gateway = openGateway();", "severity": "medium", "issue": "gateway.close() runs only on the success path; when charge() throws, the gateway is never closed, leaking the connection.", "suggested_fix": "Close the gateway in a finally block." }
+    ],
+    "src/cache.js": [
+      { "match": "entries.set(id, value)", "severity": "medium", "issue": "The cache Map grows without bound (entries are never evicted or expired), so memory grows with the number of distinct product ids.", "suggested_fix": "Bound the cache with LRU eviction or a TTL." }
+    ],
+    "src/validation.js": [
+      { "match": "parseInt(item.price, 10)", "severity": "medium", "issue": "Prices are parsed with parseInt (drops cents, e.g. 9.99 -> 9) and never checked for negativity, allowing wrong and negative order totals.", "suggested_fix": "Parse the value as cents/float and reject prices < 0." }
+    ],
+    "src/api.js": [
+      { "match": "db.getUserOrders(req.query.userId)", "severity": "high", "issue": "req.query.userId is untrusted user input passed straight into the SQL builder in db.getUserOrders; this is the injection source.", "suggested_fix": "Validate the id and rely on a parameterized query in db.getUserOrders." }
+    ],
+    "src/notifications.js": [
+      { "match": "sendEmail(order.email, 'Order placed');", "severity": "medium", "issue": "sendEmail returns a promise but is called fire-and-forget; a rejection (e.g. missing recipient) becomes an unhandled rejection that can crash the process.", "suggested_fix": "await it inside try/catch, or attach a .catch() handler." }
+    ],
+    "src/loyalty.js": [
+      { "match": "if (points > 500) return 'Gold';", "severity": "medium", "issue": "Tier thresholds use `>` but the documented rule is `>=`, so exactly 500 points is misclassified as Silver instead of Gold (off-by-one).", "suggested_fix": "Use `>=`: `if (points >= 500) return 'Gold';` and `if (points >= 100) return 'Silver';`." }
+    ],
+    "src/logger.js": [],
+    "src/index.js": []
+  },
+  "crossFile": [
+    { "file": "src/orders.js", "match": "formatPrice(total)", "severity": "high", "issue": "utils.formatPrice now requires a `currency` argument, but src/orders.js calls formatPrice(total) with one argument, so SYMBOLS[undefined] makes every receipt total render as 'undefinedNaN'.", "suggested_fix": "Pass the currency (e.g. formatPrice(total, order.currency)) or give currency a default in src/utils.js." },
+    { "file": "src/api.js", "match": "formatPrice(total)", "severity": "high", "issue": "Same contract break: src/api.js quote() calls the new two-argument utils.formatPrice with one argument, producing an invalid price string.", "suggested_fix": "Pass a currency argument, or default currency in src/utils.js." },
+    { "file": "src/db.js", "match": "config.DB_TIMEOUT", "severity": "medium", "issue": "src/config.js exports DATABASE_TIMEOUT, but src/db.js reads config.DB_TIMEOUT (the old name), so the timeout passed to connect() is undefined.", "suggested_fix": "Read config.DATABASE_TIMEOUT in src/db.js." },
+    { "file": "src/api.js", "match": "config.DB_TIMEOUT", "severity": "medium", "issue": "Same rename mismatch: src/api.js timeoutMs() reads the removed config.DB_TIMEOUT instead of config.DATABASE_TIMEOUT.", "suggested_fix": "Read config.DATABASE_TIMEOUT in src/api.js." }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "shopline-orders-api",
+  "version": "1.0.0",
+  "description": "Sample orders/checkout API used to demonstrate an automated Claude Code review pipeline.",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test",
+    "review": "powershell -NoProfile -ExecutionPolicy Bypass -File pipeline/review-pipeline.ps1",
+    "review:mock": "powershell -NoProfile -ExecutionPolicy Bypass -File pipeline/review-pipeline.ps1 -Mock",
+    "review:compare": "powershell -NoProfile -ExecutionPolicy Bypass -File pipeline/review-pipeline.ps1 -Mock -ComparePasses"
+  },
+  "license": "MIT"
+}
