@@ -1,7 +1,12 @@
 // ShopLine Orders API — entry point.
-// Baseline version on `main`. The `feature/loyalty-checkout` branch wires in
-// the new checkout + loyalty modules (and, deliberately, a few bugs to review).
+// `feature/loyalty-checkout` wires in the new checkout + loyalty modules.
 'use strict';
+
+const api = require('./api');
+const { login } = require('./auth');
+const inventory = require('./inventory');
+const { notifyOrderPlaced } = require('./notifications');
+const { awardPoints } = require('./loyalty');
 
 function createServer() {
   const routes = {};
@@ -11,8 +16,10 @@ function createServer() {
   }
 
   route('GET', '/health', () => ({ status: 'ok' }));
+  route('GET', '/orders', (req) => api.getOrders(req));
+  route('GET', '/quote', (req) => api.quote(req));
 
   return { routes };
 }
 
-module.exports = { createServer };
+module.exports = { createServer, login, inventory, notifyOrderPlaced, awardPoints };
