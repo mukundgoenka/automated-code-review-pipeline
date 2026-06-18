@@ -1,3 +1,5 @@
+Project made for assessment for BusinessLabs.org
+My id is 2026-2415
 # CI Code-Review Pipeline (Claude Code, non-interactive)
 
 An automated pull-request reviewer that runs **Claude Code in a CI pipeline** and
